@@ -11,6 +11,7 @@ import asgiref.sync
 
 _reentrant_patch_lock = threading.Lock()
 
+
 @contextlib.contextmanager
 def reentrant_patch(obj, attr, value):
     # No protection from interleaving foreign code doing same.
@@ -33,9 +34,10 @@ def reentrant_patch(obj, attr, value):
 
 _sync_to_async_call_lock = threading.Lock()
 
+
 async def sync_to_async_call(self, orig, *args, **kwargs):
     if (executor := get_current_executor()) is None:
-        # If executor is None, then the task is called outside of executor's scope.
+        # The task is called outside of executor's scope.
         return await orig(self, *args, **kwargs)
 
     else:
@@ -56,7 +58,8 @@ async def sync_to_async_call(self, orig, *args, **kwargs):
         return r
 
 
-_current_executor = contextvars.ContextVar('current_executor', default=None)
+_current_executor = contextvars.ContextVar("current_executor", default=None)
+
 
 @contextlib.contextmanager
 def set_current_executor(value):
