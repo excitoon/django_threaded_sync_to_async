@@ -31,9 +31,10 @@ def reentrant_patch(obj, attr, value):
         del contexts[context_id]
 
 
-async def sync_to_async_call(self, orig, name, *args, **kwargs):
-    executor = thread_local_context_get(name)
+async def sync_to_async_call(self, orig, *args, **kwargs):
+    executor = get_current_executor()
 
+    # FIXME another async function or thread can take self over. We need to copy `self` and set required properties there.
     # `reentrant_patch` is an overkill here, but it's fine.
     with reentrant_patch(self, "_thread_sensitive", False):
         with reentrant_patch(self, "_executor", executor):
@@ -45,28 +46,25 @@ async def sync_to_async_call(self, orig, name, *args, **kwargs):
             return r
 
 
-_thread_local_storage = threading.local()
+_current_executor = contextvars.ContextVar('current_executor', default=None)
 
 @contextlib.contextmanager
-def thread_local_context_set(name, value):
-    stack = getattr(_thread_local_storage, name, [])
-    if not stack:
-        setattr(_thread_local_storage, name, stack)
-    stack.append(value)
-    yield name
-    stack.pop()
+def set_current_executor(value):
+    # This is essentially same thing as `reentrant_patch()`.
+    token = _current_executor.set(value)
+    yield
+    _current_executor.reset(token)
 
 
-def thread_local_context_get(name):
-    stack = getattr(_thread_local_storage, name)
-    return stack and stack[-1] or None
+def get_current_executor():
+    return _current_executor.get()
 
 
 @contextlib.asynccontextmanager
 async def SyncToAsyncThreadPoolExecutor(*args, **kwargs):
     with concurrent.futures.ThreadPoolExecutor(*args, **kwargs) as executor:
-        with thread_local_context_set("__executors", executor) as name:
-            with reentrant_patch(asgiref.sync.SyncToAsync, "__call__", functools.partialmethod(sync_to_async_call, asgiref.sync.SyncToAsync.__call__, name)):
+        with set_current_executor(executor):
+            with reentrant_patch(asgiref.sync.SyncToAsync, "__call__", functools.partialmethod(sync_to_async_call, asgiref.sync.SyncToAsync.__call__)):
                 yield executor
 
 
@@ -86,22 +84,22 @@ def long_call(arg):
     print(f"3 from {threading.current_thread().name}")
 
 
-async def test():
-    async with SyncToAsyncThreadPoolExecutor(thread_name_prefix="thread", max_workers=3) as executor:
-        a = asgiref.sync.sync_to_async(long_call)(1)
-        b = asgiref.sync.sync_to_async(long_call)(2)
-        c = asgiref.sync.sync_to_async(long_call)(3)
-        d = asgiref.sync.sync_to_async(long_call)(4)
-        await asyncio.gather(a, b, c, d)
-
-
-@SyncToAsyncThreadPoolExecutor(thread_name_prefix="thread", max_workers=3)
-async def test2():
+async def four_calls():
     a = asgiref.sync.sync_to_async(long_call)(1)
     b = asgiref.sync.sync_to_async(long_call)(2)
     c = asgiref.sync.sync_to_async(long_call)(3)
     d = asgiref.sync.sync_to_async(long_call)(4)
-    await asyncio.gather(a, b, c, d)
+    return await asyncio.gather(a, b, c, d)
+
+
+async def test():
+    async with SyncToAsyncThreadPoolExecutor(thread_name_prefix="thread", max_workers=3) as executor:
+        await four_calls()
+
+
+@SyncToAsyncThreadPoolExecutor(thread_name_prefix="thread", max_workers=3)
+async def test2():
+    await four_calls()
 
 
 asyncio.run(amain())
