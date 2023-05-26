@@ -107,6 +107,7 @@ async def test():
         await four_calls()
 
 
+# N.B. `contextlib.asynccontextmanager` only works as decorator since Python 3.10.
 @SyncToAsyncThreadPoolExecutor(thread_name_prefix="thread", max_workers=3)
 async def test2():
     await four_calls()
