@@ -43,8 +43,10 @@ async def sync_to_async_call(self, orig, *args, **kwargs):
             clones = getattr(self, "__clones", {})
             if not clones:
                 setattr(self, "__clones", clones)
-            if id(executor) not in clones:
-                clone = clones[id(executor)] = asgiref.sync.SyncToAsync(self.func, thread_sensitive=False, executor=executor)
+            if executor in clones:
+                clone = clones[executor]
+            else:
+                clone = clones.setdefault(executor, asgiref.sync.SyncToAsync(self.func, thread_sensitive=False, executor=executor))
 
         try:
             print(f"Started {self.func.__name__}({list(args)}, {kwargs})")
