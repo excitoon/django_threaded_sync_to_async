@@ -31,26 +31,34 @@ def reentrant_patch(obj, attr, value):
         del contexts[context_id]
 
 
-async def sync_to_async_call(self, orig, *args, **kwargs):
-    executor = get_current_executor()
+_sync_to_async_call_lock = threading.Lock()
 
-    # FIXME another async function or thread can take self over. We need to copy `self` and set required properties there.
-    # `reentrant_patch` is an overkill here, but it's fine.
-    with reentrant_patch(self, "_thread_sensitive", False):
-        with reentrant_patch(self, "_executor", executor):
-            try:
-                print(f"Started {self.func.__name__}({list(args)}, {kwargs})")
-                r = await orig(self, *args, **kwargs)
-            finally:
-                print(f"Ended {self.func.__name__}({list(args)}, {kwargs})")
-            return r
+async def sync_to_async_call(self, orig, *args, **kwargs):
+    if (executor := get_current_executor()) is None:
+        # If executor is None, then the task is called outside of executor's scope.
+        return await orig(self, *args, **kwargs)
+
+    else:
+        with _sync_to_async_call_lock:
+            clones = getattr(self, "__clones", {})
+            if not clones:
+                setattr(self, "__clones", clones)
+            if id(executor) not in clones:
+                clone = clones[id(executor)] = asgiref.sync.SyncToAsync(self.func, thread_sensitive=False, executor=executor)
+
+        try:
+            print(f"Started {self.func.__name__}({list(args)}, {kwargs})")
+            r = await orig(clone, *args, **kwargs)
+        finally:
+            print(f"Ended {self.func.__name__}({list(args)}, {kwargs})")
+        return r
 
 
 _current_executor = contextvars.ContextVar('current_executor', default=None)
 
 @contextlib.contextmanager
 def set_current_executor(value):
-    # This is essentially same thing as `reentrant_patch()`.
+    # This is almost the same thing as `reentrant_patch()`.
     token = _current_executor.set(value)
     yield
     _current_executor.reset(token)
