@@ -23,9 +23,9 @@ def reentrant_patch(obj, attr, value):
     """
 
     with _reentrant_patch_lock:
-        contexts = getattr(obj, f"{attr}__contexts", {})
+        contexts = getattr(obj, f"__{attr}__contexts__", {})
         if not contexts:
-            setattr(obj, f"{attr}__contexts", contexts)
+            setattr(obj, f"__{attr}__contexts__", contexts)
         context_id = len(contexts) + 1
         contexts[context_id] = getattr(obj, attr)
         setattr(obj, attr, value)
@@ -36,6 +36,8 @@ def reentrant_patch(obj, attr, value):
         if next(reversed(contexts)) == context_id:
             setattr(obj, attr, contexts[context_id])
         del contexts[context_id]
+        if not contexts:
+            delattr(obj, f"__{attr}__contexts__")
 
 
 _one_time_patch_lock = threading.Lock()
@@ -48,19 +50,19 @@ def one_time_patch(obj, attr, value):
     Effectively guarantees to restore original value after all contexts are destroyed.
     """
 
-    if not hasattr(obj, f"{attr}__patched"):
+    if not hasattr(obj, f"__{attr}__patched__"):
         with _one_time_patch_lock:
-            old_value = getattr(obj, f"{attr}__patched", ...)
+            old_value = getattr(obj, f"__{attr}__patched__", ...)
             if old_value == ...:
-                setattr(obj, f"{attr}__patched", getattr(obj, attr))
+                setattr(obj, f"__{attr}__patched__", getattr(obj, attr))
                 setattr(obj, attr, value)
 
     yield
 
     if old_value == ...:
         with _one_time_patch_lock:
-            setattr(obj, attr, getattr(obj, f"{attr}__patched"))
-            delattr(obj, f"{attr}__patched")
+            setattr(obj, attr, getattr(obj, f"__{attr}__patched__"))
+            delattr(obj, f"__{attr}__patched__")
 
 
 async def sync_to_async_call(self, orig, *args, **kwargs):
