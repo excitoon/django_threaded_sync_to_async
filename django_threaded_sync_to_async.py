@@ -80,7 +80,6 @@ _current_executor = contextvars.ContextVar("current_executor", default=None)
 
 @contextlib.contextmanager
 def set_current_executor(value):
-    # This is almost the same thing as `reentrant_patch()`.
     token = _current_executor.set(value)
     yield
     _current_executor.reset(token)
