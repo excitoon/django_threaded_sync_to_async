@@ -63,8 +63,8 @@ def one_time_patch(obj, attr, value):
             delattr(obj, f"__{attr}__patched__")
 
 
-async def sync_to_async_call(self, orig, *args, **kwargs):
-    if (executor := get_current_executor()) is not None:
+async def _sync_to_async_call(self, orig, *args, **kwargs):
+    if (executor := _get_current_executor()) is not None:
         self = asgiref.sync.SyncToAsync(self.func, thread_sensitive=False, executor=executor)
 
     else:
@@ -79,20 +79,20 @@ _current_executor = contextvars.ContextVar("current_executor", default=None)
 
 
 @contextlib.contextmanager
-def set_current_executor(value):
+def _set_current_executor(value):
     token = _current_executor.set(value)
     yield
     _current_executor.reset(token)
 
 
-def get_current_executor():
+def _get_current_executor():
     return _current_executor.get()
 
 
 @contextlib.asynccontextmanager
 async def Executor(*args, **kwargs):
     with concurrent.futures.ThreadPoolExecutor(*args, **kwargs) as executor:
-        with set_current_executor(executor):
+        with _set_current_executor(executor):
             # It can be replaced by a single call to `setattr(obj, attr, value)` if we don't care about restoring everything back.
-            with one_time_patch(asgiref.sync.SyncToAsync, "__call__", functools.partialmethod(sync_to_async_call, asgiref.sync.SyncToAsync.__call__)):
+            with one_time_patch(asgiref.sync.SyncToAsync, "__call__", functools.partialmethod(_sync_to_async_call, asgiref.sync.SyncToAsync.__call__)):
                 yield executor
