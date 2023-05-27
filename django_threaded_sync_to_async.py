@@ -1,10 +1,8 @@
-import asyncio
 import concurrent.futures
 import contextlib
 import contextvars
 import functools
 import threading
-import time
 
 import asgiref.sync
 
@@ -66,19 +64,15 @@ def one_time_patch(obj, attr, value):
 
 
 async def sync_to_async_call(self, orig, *args, **kwargs):
-    if (executor := get_current_executor()) is None:
-        # The task is called outside of executor's scope (or in different context).
-        return await orig(self, *args, **kwargs)
+    if (executor := get_current_executor()) is not None:
+        self = asgiref.sync.SyncToAsync(self.func, thread_sensitive=False, executor=executor)
 
     else:
-        new_self = asgiref.sync.SyncToAsync(self.func, thread_sensitive=False, executor=executor)
+        """
+        The task is called outside of executor's scope (or in different context).
+        """
 
-        try:
-            print(f"Started {self.func.__name__}({list(args)}, {kwargs})")
-            r = await orig(new_self, *args, **kwargs)
-        finally:
-            print(f"Ended {self.func.__name__}({list(args)}, {kwargs})")
-        return r
+    return await orig(self, *args, **kwargs)
 
 
 _current_executor = contextvars.ContextVar("current_executor", default=None)
@@ -97,47 +91,9 @@ def get_current_executor():
 
 
 @contextlib.asynccontextmanager
-async def SyncToAsyncThreadPoolExecutor(*args, **kwargs):
+async def Executor(*args, **kwargs):
     with concurrent.futures.ThreadPoolExecutor(*args, **kwargs) as executor:
         with set_current_executor(executor):
             # It can be replaced by a single call to `setattr(obj, attr, value)` if we don't care about restoring everything back.
             with one_time_patch(asgiref.sync.SyncToAsync, "__call__", functools.partialmethod(sync_to_async_call, asgiref.sync.SyncToAsync.__call__)):
                 yield executor
-
-
-async def amain():
-    print("--- Hey")
-    await test()
-    print("--- Second test")
-    await test2()
-    print("--- Bye")
-
-
-def long_call(arg):
-    print(f"1 from {threading.current_thread().name}")
-    time.sleep(1)
-    print(f"2 from {threading.current_thread().name}")
-    time.sleep(1)
-    print(f"3 from {threading.current_thread().name}")
-
-
-async def four_calls():
-    a = asgiref.sync.sync_to_async(long_call)(1)
-    b = asgiref.sync.sync_to_async(long_call)(2)
-    c = asgiref.sync.sync_to_async(long_call)(3)
-    d = asgiref.sync.sync_to_async(long_call)(4)
-    return await asyncio.gather(a, b, c, d)
-
-
-async def test():
-    async with SyncToAsyncThreadPoolExecutor(thread_name_prefix="thread", max_workers=3) as executor:
-        await four_calls()
-
-
-# N.B. `contextlib.asynccontextmanager` only works as decorator since Python 3.10.
-@SyncToAsyncThreadPoolExecutor(thread_name_prefix="thread", max_workers=3)
-async def test2():
-    await four_calls()
-
-
-asyncio.run(amain())
