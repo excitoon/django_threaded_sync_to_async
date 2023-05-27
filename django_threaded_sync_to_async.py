@@ -98,5 +98,6 @@ async def Executor(*args, **kwargs):
     with concurrent.futures.ThreadPoolExecutor(*args, **kwargs) as executor:
         with _set_current_executor(executor):
             # It can be replaced by a single call to `setattr(obj, attr, value)` if we don't care about restoring everything back.
-            with one_time_patch(asgiref.sync.SyncToAsync, "__call__", functools.partialmethod(_sync_to_async_call, asgiref.sync.SyncToAsync.__call__)):
+            new_call = functools.partialmethod(_sync_to_async_call, asgiref.sync.SyncToAsync.__call__)
+            with one_time_patch(asgiref.sync.SyncToAsync, "__call__", new_call):
                 yield executor
