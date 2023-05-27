@@ -13,7 +13,7 @@ _reentrant_patch_lock = threading.Lock()
 @contextlib.contextmanager
 def reentrant_patch(obj, attr, value):
     """
-    This is a time-aware patching without locking like in `unittest.mock.patch`, the context will leak system-wide.
+    Makes time-aware patching without locking like in `unittest.mock.patch`, the context will leak system-wide.
     However, if no `await` happens after obtaining the context, and no threads are getting the same attribute,
     it guarantees that the attribute will have the desired value.
     Effectively guarantees to restore original value after all contexts are destroyed.
@@ -23,18 +23,20 @@ def reentrant_patch(obj, attr, value):
     with _reentrant_patch_lock:
         contexts = getattr(obj, f"__{attr}__contexts__", {})
         if not contexts:
+            contexts[1] = getattr(obj, attr)
             setattr(obj, f"__{attr}__contexts__", contexts)
         context_id = len(contexts) + 1
-        contexts[context_id] = getattr(obj, attr)
+        contexts[context_id] = value
         setattr(obj, attr, value)
 
     yield
 
     with _reentrant_patch_lock:
-        if next(reversed(contexts)) == context_id:
-            setattr(obj, attr, contexts[context_id])
+        last_context_id = next(reversed(contexts))
         del contexts[context_id]
-        if not contexts:
+        if last_context_id == context_id:
+            setattr(obj, attr, next(reversed(contexts.values())))
+        if len(contexts) == 1:
             delattr(obj, f"__{attr}__contexts__")
 
 
@@ -48,19 +50,21 @@ def one_time_patch(obj, attr, value):
     Effectively guarantees to restore original value after all contexts are destroyed.
     """
 
-    if not hasattr(obj, f"__{attr}__patched__"):
-        with _one_time_patch_lock:
-            old_value = getattr(obj, f"__{attr}__patched__", ...)
-            if old_value == ...:
-                setattr(obj, f"__{attr}__patched__", getattr(obj, attr))
-                setattr(obj, attr, value)
+    with _one_time_patch_lock:
+        if not hasattr(obj, f"__{attr}__value__"):
+            setattr(obj, f"__{attr}__value__", getattr(obj, attr))
+            setattr(obj, attr, value)
+        setattr(obj, f"__{attr}__count__", getattr(obj, f"__{attr}__count__", 0) + 1)
 
     yield
 
-    if old_value == ...:
-        with _one_time_patch_lock:
-            setattr(obj, attr, getattr(obj, f"__{attr}__patched__"))
-            delattr(obj, f"__{attr}__patched__")
+    with _one_time_patch_lock:
+        count = getattr(obj, f"__{attr}__count__") - 1
+        setattr(obj, f"__{attr}__count__", count)
+        if not count:
+            setattr(obj, attr, getattr(obj, f"__{attr}__value__"))
+            delattr(obj, f"__{attr}__value__")
+            delattr(obj, f"__{attr}__count__")
 
 
 async def _sync_to_async_call(self, orig, *args, **kwargs):
