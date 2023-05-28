@@ -13,7 +13,8 @@ _reentrant_patch_lock = threading.Lock()
 @contextlib.contextmanager
 def reentrant_patch(obj, attr, value):
     """
-    Makes time-aware patching without locking like in `unittest.mock.patch`, the context will leak system-wide.
+    Makes time-aware patch on the attribute of the object without locking like in `unittest.mock.patch`, the context
+    will leak system-wide.
     However, if no `await` happens after obtaining the context, and no threads are getting the same attribute,
     it guarantees that the attribute will have the desired value.
     Effectively guarantees to restore original value after all contexts are destroyed.
