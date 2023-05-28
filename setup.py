@@ -8,8 +8,8 @@ with open(f"{os.path.dirname(os.path.abspath(__file__))}/requirements.txt") as r
     with open(f"{os.path.dirname(os.path.abspath(__file__))}/README.md") as readme:
         setuptools.setup(
             name="django_threaded_sync_to_async",
-            version="1.0.0",
-            description="FIXME", # FIXME
+            version="1.0.1",
+            description="Tools for replacing `sync_to_async` calls to `sync_to_async(thread_sensitive=None, executor=...)`, effectively allowing Django to make calls to database concurrently",
             long_description=readme.read(),
             long_description_content_type="text/markdown",
             author="Vladimir Chebotarev",
@@ -32,7 +32,7 @@ with open(f"{os.path.dirname(os.path.abspath(__file__))}/requirements.txt") as r
                 "Topic :: Software Development :: Version Control :: Git",
                 "Topic :: Text Processing :: Filters",
             ], # FIXME
-            keywords=["git", "gitignore"], # FIXME
+            keywords=["django", "asyncio", "asgiref", "sync_to_async"],
             project_urls={
                 "Documentation": "https://github.com/excitoon/django_threaded_sync_to_async/blob/master/README.md",
                 "Source": "https://github.com/excitoon/django_threaded_sync_to_async",
