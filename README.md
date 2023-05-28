@@ -1,6 +1,6 @@
 ## `django_threaded_sync_to_async`
 
-Tools for replacing `sync_to_async` calls to `sync_to_async(thread_sensitive=None, executor=...)`, effectively allowing Django to make calls to database concurrently.
+Tools for replacing `sync_to_async` calls to `sync_to_async(thread_sensitive=False, executor=...)`, effectively allowing Django to make calls to database concurrently.
 
 ```
 pip3 install django_threaded_sync_to_async
