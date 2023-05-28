@@ -27,7 +27,7 @@ Maintains global dictionary of executors (`concurrent.futures.ThreadPoolExecutor
 import django_threaded_sync_to_async
 
 @django_threaded_sync_to_async.SharedExecutor("common", max_workers=3, max_tasks=2)
-def operations():
+async def operations():
     a = asgiref.sync.sync_to_async(long_call)(1)
     b = asgiref.sync.sync_to_async(long_call)(2)
     c = asgiref.sync.sync_to_async(long_call)(3)
