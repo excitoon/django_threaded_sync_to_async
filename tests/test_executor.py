@@ -32,7 +32,7 @@ class TestExecutor(unittest.IsolatedAsyncioTestCase):
 
         with self.subTest(parallel=True, decorated=False):
             threads = set()
-            async with django_threaded_sync_to_async.Executor(thread_name_prefix="T", max_workers=workers):
+            async with django_threaded_sync_to_async.Executor(max_workers=workers):
                 ff = [asyncio.create_task(asgiref.sync.sync_to_async(long_call)(threads)) for _ in range(workers)]
                 try:
                     for c in asyncio.as_completed(ff, timeout=timeout):
@@ -44,7 +44,7 @@ class TestExecutor(unittest.IsolatedAsyncioTestCase):
 
         with self.subTest(parallel=True, decorated=True):
             threads = set()
-            async with django_threaded_sync_to_async.Executor(thread_name_prefix="T", max_workers=workers):
+            async with django_threaded_sync_to_async.Executor(max_workers=workers):
                 ff = [asyncio.create_task(decorated_long_call(threads)) for _ in range(workers)]
                 try:
                     for c in asyncio.as_completed(ff, timeout=timeout):
