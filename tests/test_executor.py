@@ -8,7 +8,7 @@ import django_threaded_sync_to_async
 
 
 class TestExecutor(unittest.IsolatedAsyncioTestCase):
-    async def testSimple(self):
+    async def testConcurrent(self):
         cv = threading.Condition()
         workers = 50
         timeout = 0.1
@@ -26,17 +26,11 @@ class TestExecutor(unittest.IsolatedAsyncioTestCase):
                 notify.start()
                 return cv.wait_for(lambda: len(threads) == workers, timeout)
 
-        with self.subTest(parallel=False):
-            threads = set()
-            ff = [asyncio.create_task(asgiref.sync.sync_to_async(long_call)(threads)) for _ in range(workers)]
-            try:
-                for c in asyncio.as_completed(ff, timeout=timeout):
-                    self.assertEqual(await c, False)
-            except asyncio.TimeoutError:
-                for f in ff:
-                    f.cancel()
+        @asgiref.sync.sync_to_async
+        def decorated_long_call(threads):
+            return long_call(threads)
 
-        with self.subTest(parallel=True):
+        with self.subTest(parallel=True, decorated=False):
             threads = set()
             async with django_threaded_sync_to_async.Executor(thread_name_prefix="T", max_workers=workers):
                 ff = [asyncio.create_task(asgiref.sync.sync_to_async(long_call)(threads)) for _ in range(workers)]
@@ -47,3 +41,39 @@ class TestExecutor(unittest.IsolatedAsyncioTestCase):
                     for f in ff:
                         f.cancel()
                     raise
+
+        with self.subTest(parallel=True, decorated=True):
+            threads = set()
+            async with django_threaded_sync_to_async.Executor(thread_name_prefix="T", max_workers=workers):
+                ff = [asyncio.create_task(decorated_long_call(threads)) for _ in range(workers)]
+                try:
+                    for c in asyncio.as_completed(ff, timeout=timeout):
+                        self.assertEqual(await c, True)
+                except asyncio.TimeoutError:
+                    for f in ff:
+                        f.cancel()
+                    raise
+
+        with self.subTest(parallel=False, decorated=False):
+            threads = set()
+            ff = [asyncio.create_task(asgiref.sync.sync_to_async(long_call)(threads)) for _ in range(workers)]
+            try:
+                for c in asyncio.as_completed(ff, timeout=timeout):
+                    self.assertEqual(await c, False)
+            except asyncio.TimeoutError:
+                for f in ff:
+                    f.cancel()
+            else:
+                self.assertEqual("No", "exception")
+
+        with self.subTest(parallel=False, decorated=True):
+            threads = set()
+            ff = [asyncio.create_task(decorated_long_call(threads)) for _ in range(workers)]
+            try:
+                for c in asyncio.as_completed(ff, timeout=timeout):
+                    self.assertEqual(await c, False)
+            except asyncio.TimeoutError:
+                for f in ff:
+                    f.cancel()
+            else:
+                self.assertEqual("No", "exception")
