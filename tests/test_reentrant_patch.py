@@ -1,6 +1,6 @@
 import unittest
 
-import django_threaded_sync_to_async
+import django_threaded_sync_to_async.patch
 
 
 class TestReentrantPatch(unittest.TestCase):
@@ -13,10 +13,10 @@ class TestReentrantPatch(unittest.TestCase):
 
         with self.subTest(inside=[]):
             self.assertEqual(o.x, 1)
-        with django_threaded_sync_to_async.reentrant_patch(o, "x", 2):
+        with django_threaded_sync_to_async.patch.reentrant(o, "x", 2):
             with self.subTest(inside=["c1"]):
                 self.assertEqual(o.x, 2)
-            with django_threaded_sync_to_async.reentrant_patch(o, "x", 3):
+            with django_threaded_sync_to_async.patch.reentrant(o, "x", 3):
                 with self.subTest(inside=["c1", "c2"]):
                     self.assertEqual(o.x, 3)
             with self.subTest(inside=["c1"]):
@@ -34,8 +34,8 @@ class TestReentrantPatch(unittest.TestCase):
         o = Dummy()
         fields = dir(o)
 
-        c1 = django_threaded_sync_to_async.reentrant_patch(o, "x", 2)
-        c2 = django_threaded_sync_to_async.reentrant_patch(o, "x", 3)
+        c1 = django_threaded_sync_to_async.patch.reentrant(o, "x", 2)
+        c2 = django_threaded_sync_to_async.patch.reentrant(o, "x", 3)
 
         with self.subTest(inside=[]):
             self.assertEqual(o.x, 1)

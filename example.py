@@ -38,7 +38,6 @@ async def test():
         await four_calls()
 
 
-# N.B. `contextlib.asynccontextmanager` only works as decorator since Python 3.10.
 @django_threaded_sync_to_async.Executor(thread_name_prefix="thread", max_workers=3)
 async def test2():
     await four_calls()

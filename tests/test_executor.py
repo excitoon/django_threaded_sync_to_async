@@ -39,6 +39,7 @@ class TestExecutor(unittest.IsolatedAsyncioTestCase):
                 with self.subTest(parallel=parallel, decorated=decorated):
                     cv = threading.Condition()
                     threads = set()
+
                     async with context(max_workers=workers):
                         tt = [asyncio.create_task(function(cv, threads)) for _ in range(workers)]
                         try:
@@ -52,3 +53,5 @@ class TestExecutor(unittest.IsolatedAsyncioTestCase):
                         else:
                             if not parallel:
                                 self.assertEqual("No", "exception")
+
+                    self.assertEqual(len(threads), workers if parallel else 1)
