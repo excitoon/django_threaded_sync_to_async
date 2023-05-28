@@ -40,13 +40,13 @@ class TestExecutor(unittest.IsolatedAsyncioTestCase):
                 with self.subTest(parallel=parallel, decorated=decorated):
                     threads = set()
                     async with context(max_workers=workers):
-                        ff = [asyncio.create_task(function(threads)) for _ in range(workers)]
+                        tt = [asyncio.create_task(function(threads)) for _ in range(workers)]
                         try:
-                            for c in asyncio.as_completed(ff, timeout=timeout):
+                            for c in asyncio.as_completed(tt, timeout=timeout):
                                 self.assertEqual(await c, parallel)
                         except asyncio.TimeoutError:
-                            for f in ff:
-                                f.cancel()
+                            for t in tt:
+                                t.cancel()
                             if parallel:
                                 self.assertEqual("Exception", "occurred")
                         else:
