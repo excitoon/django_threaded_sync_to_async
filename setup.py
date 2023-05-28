@@ -8,7 +8,7 @@ with open(f"{os.path.dirname(os.path.abspath(__file__))}/requirements.txt") as r
     with open(f"{os.path.dirname(os.path.abspath(__file__))}/README.md") as readme:
         setuptools.setup(
             name="django_threaded_sync_to_async",
-            version="1.0.1",
+            version="1.0.2",
             description="Tools for replacing `sync_to_async` calls to `sync_to_async(thread_sensitive=False, executor=...)`, effectively allowing Django to make calls to database concurrently",
             long_description=readme.read(),
             long_description_content_type="text/markdown",
