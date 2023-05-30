@@ -32,6 +32,9 @@ async def _sync_to_async_call(self, *args, **kwargs):
         self = asgiref.sync.SyncToAsync(self.func, thread_sensitive=False, executor=executor)
 
     async with _max_tasks_semaphore.get() or _nullcontext():
+        # We use `_original_sync_to_async_call` here because of the following reasons:
+        # – this function is not reentrant and locking on semaphore will exhaust it too early;
+        # – reentrancy will have negative performance effect.
         return await _original_sync_to_async_call(self, *args, **kwargs)
 
 
