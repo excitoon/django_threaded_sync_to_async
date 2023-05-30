@@ -90,6 +90,15 @@ class TestSharedExecutor(unittest.IsolatedAsyncioTestCase):
 
                             self.assertEqual(results, {tasks} if parallel else {1})
 
+    async def testNested(self):
+        async with django_threaded_sync_to_async.SharedExecutor("nested", max_tasks=1, max_workers=1):
+            async with django_threaded_sync_to_async.SharedExecutor("nested", max_tasks=1, max_workers=1):
+                task = asyncio.create_task(asgiref.sync.sync_to_async(lambda: 42)())
+                done, pending = await asyncio.wait((task,), timeout=0.1)
+                for f in pending:
+                    f.cancel()
+                self.assertEqual([f.result() for f in done], [42])
+
     @django_threaded_sync_to_async.SharedExecutor("decorator")
     async def testDecorator(self):
         self.assertIsNotNone(django_threaded_sync_to_async._current_executor.get())

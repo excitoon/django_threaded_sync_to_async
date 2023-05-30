@@ -47,9 +47,16 @@ def _set_context_variable(variable, value):
 
 @contextlib.contextmanager
 def _use_executor(executor, patcher=None):
-    patcher = patcher or django_threaded_sync_to_async.patch.one_time
-    # `patch.one_time()` can be replaced with `patch.permanent()` if we don't care about restoring everything back.
-    with patcher(asgiref.sync.SyncToAsync, "__call__", _sync_to_async_call):
+    if _current_executor.get() is None:
+        # `patch.one_time()` can be replaced with `patch.permanent()` if we don't care about restoring everything back.
+        patcher = patcher or django_threaded_sync_to_async.patch.one_time
+        patch_context = patcher(asgiref.sync.SyncToAsync, "__call__", _sync_to_async_call)
+
+    else:
+        # Already patched.
+        patch_context = contextlib.nullcontext()
+
+    with patch_context:
         with _set_context_variable(_current_executor, executor):
             yield executor
 
