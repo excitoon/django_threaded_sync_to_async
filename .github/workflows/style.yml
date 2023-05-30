@@ -1,0 +1,41 @@
+name: Style
+
+on:
+  push:
+    branches: [master]
+
+  pull_request:
+    branches: [master]
+
+jobs:
+  lack:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v3
+    - name: Set up Python 3.11
+      uses: actions/setup-python@v4
+      with:
+        python-version: 3.11
+        allow-prereleases: true
+    - name: Install dependencies
+      run: |
+        pip3 install lack
+    - name: Check by `lack`
+      run: |
+        lack --check --diff .
+
+  isort:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v3
+    - name: Set up Python 3.11
+      uses: actions/setup-python@v4
+      with:
+        python-version: 3.11
+        allow-prereleases: true
+    - name: Install dependencies
+      run: |
+        pip3 install isort
+    - name: Check by `isort`
+      run: |
+        isort --check --diff .

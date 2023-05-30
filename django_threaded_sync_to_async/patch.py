@@ -1,3 +1,4 @@
+import collections
 import contextlib
 import threading
 
@@ -18,7 +19,7 @@ def reentrant(obj, attr, value):
     """
 
     with _reentrant_lock:
-        contexts = getattr(obj, f"__{attr}__contexts__", {})
+        contexts = getattr(obj, f"__{attr}__contexts__", collections.OrderedDict())
         if not contexts:
             contexts[1] = getattr(obj, attr)
             setattr(obj, f"__{attr}__contexts__", contexts)
