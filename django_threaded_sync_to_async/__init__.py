@@ -16,16 +16,22 @@ _shared_executors = {}
 _shared_executors_lock = threading.Lock()
 
 
-async def _sync_to_async_call(self, orig, *args, **kwargs):
-    if (executor := _current_executor.get()) is not None:
-        self = asgiref.sync.SyncToAsync(self.func, thread_sensitive=False, executor=executor)
+@contextlib.asynccontextmanager
+async def _nullcontext():
+    # Python 3.9 and earlier.
+    yield
 
-    else:
+
+async def _sync_to_async_call(self, orig, *args, **kwargs):
+    if (executor := _current_executor.get()) is None:
         """
         The task hit the call outside of executor's scope (or in different context).
         """
 
-    async with _max_tasks_semaphore.get() or contextlib.nullcontext(): # Python 3.10+.
+    else:
+        self = asgiref.sync.SyncToAsync(self.func, thread_sensitive=False, executor=executor)
+
+    async with _max_tasks_semaphore.get() or _nullcontext():
         return await orig(self, *args, **kwargs)
 
 

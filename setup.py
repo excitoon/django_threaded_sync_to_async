@@ -1,6 +1,7 @@
 """Setup script."""
 
 import os
+
 import setuptools
 
 
@@ -21,6 +22,8 @@ with open(f"{os.path.dirname(os.path.abspath(__file__))}/requirements.txt") as r
                 "License :: OSI Approved :: MIT License",
                 "Operating System :: OS Independent",
                 "Programming Language :: Python :: 3 :: Only",
+                "Programming Language :: Python :: 3.8",
+                "Programming Language :: Python :: 3.9",
                 "Programming Language :: Python :: 3.10",
                 "Programming Language :: Python :: 3.11",
                 "Programming Language :: Python :: 3.12",
