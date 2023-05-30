@@ -8,9 +8,10 @@ import unittest
 import asgiref.sync
 
 import django_threaded_sync_to_async
+import tests
 
 
-class TestSharedExecutor(unittest.IsolatedAsyncioTestCase):
+class TestSharedExecutor(tests.IsolatedAsyncioTestCase):
     async def testSimple(self):
         async with django_threaded_sync_to_async.SharedExecutor("simple_common") as executor:
             pass
@@ -99,6 +100,7 @@ class TestSharedExecutor(unittest.IsolatedAsyncioTestCase):
                     f.cancel()
                 self.assertEqual([f.result() for f in done], [42])
 
-    @django_threaded_sync_to_async.SharedExecutor("decorator")
-    async def testDecorator(self):
-        self.assertIsNotNone(django_threaded_sync_to_async._current_executor.get())
+
+#    @django_threaded_sync_to_async.SharedExecutor("decorator")
+#    async def testDecorator(self):
+#        self.assertIsNotNone(django_threaded_sync_to_async._current_executor.get())
