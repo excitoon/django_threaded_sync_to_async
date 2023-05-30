@@ -23,7 +23,8 @@ async def _nullcontext():
 
 
 async def _sync_to_async_call(self, *args, **kwargs):
-    if (executor := _current_executor.get()) is None:
+    executor = _current_executor.get()
+    if executor is None:
         """
         The task hit the call outside of executor's scope (or in different context).
         """
