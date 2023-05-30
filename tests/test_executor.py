@@ -34,31 +34,36 @@ class TestExecutor(unittest.IsolatedAsyncioTestCase):
 
         for parallel, context in ((False, empty), (True, django_threaded_sync_to_async.Executor)):
             for decorated, function in ((False, asgiref.sync.sync_to_async(long_call)), (True, decorated_long_call)):
-                with self.subTest(parallel=parallel, decorated=decorated):
-                    barrier = threading.Barrier(workers, timeout=timeout * 2 / 3)
-                    threads = set()
-                    results = set()
+                for patcher in (
+                    django_threaded_sync_to_async.patch.reentrant,
+                    django_threaded_sync_to_async.patch.one_time,
+                    django_threaded_sync_to_async.patch.permanent,
+                ):
+                    with self.subTest(parallel=parallel, decorated=decorated, patcher=patcher.__name__):
+                        barrier = threading.Barrier(workers, timeout=timeout * 2 / 3)
+                        threads = set()
+                        results = set()
 
-                    async with context(max_workers=workers):
-                        tt = [asyncio.create_task(function(barrier, threads)) for _ in range(workers)]
-                        try:
+                        async with context(max_workers=workers, patcher=patcher):
+                            tt = [asyncio.create_task(function(barrier, threads)) for _ in range(workers)]
                             try:
-                                for c in asyncio.as_completed(tt, timeout=timeout):
-                                    results.add(await c)
-                            except:
-                                for t in tt:
-                                    t.cancel()
+                                try:
+                                    for c in asyncio.as_completed(tt, timeout=timeout):
+                                        results.add(await c)
+                                except:
+                                    for t in tt:
+                                        t.cancel()
+                                    raise
+                            except asyncio.TimeoutError:
+                                if parallel:
+                                    self.assertEqual("Timed", "out")
+                            except self.failureException:
                                 raise
-                        except asyncio.TimeoutError:
-                            if parallel:
-                                self.assertEqual("Timed", "out")
-                        except self.failureException:
-                            raise
-                        except Exception:
-                            self.assertEqual("Exception", "occurred")
+                            except Exception:
+                                self.assertEqual("Exception", "occurred")
 
-                    self.assertEqual(len(threads), workers if parallel else 1)
-                    self.assertEqual(results, {workers} if parallel else {1})
+                        self.assertEqual(len(threads), workers if parallel else 1)
+                        self.assertEqual(results, {workers} if parallel else {1})
 
     @django_threaded_sync_to_async.Executor()
     async def testDecorator(self):

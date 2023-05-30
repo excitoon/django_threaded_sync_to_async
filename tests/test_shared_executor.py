@@ -54,31 +54,41 @@ class TestSharedExecutor(unittest.IsolatedAsyncioTestCase):
         for parallel, context in ((False, empty), (True, django_threaded_sync_to_async.SharedExecutor)):
             for decorated, function in ((False, asgiref.sync.sync_to_async(long_call)), (True, decorated_long_call)):
                 for tasks in (workers, workers - 1):
-                    with self.subTest(parallel=parallel, decorated=decorated, tasks=tasks):
-                        # In some tests barriers will break, so we need few of them.
-                        barriers = [threading.Barrier(workers, timeout=timeout / 3) for _ in range(4)]
-                        threads = set()
-                        results = set()
-
-                        async with context(
-                            f"max_tasks_{parallel}_{decorated}_{tasks}", max_workers=workers, max_tasks=tasks
+                    for patcher in (
+                        django_threaded_sync_to_async.patch.reentrant,
+                        django_threaded_sync_to_async.patch.one_time,
+                        django_threaded_sync_to_async.patch.permanent,
+                    ):
+                        with self.subTest(
+                            parallel=parallel, decorated=decorated, tasks=tasks, patcher=patcher.__name__
                         ):
-                            tt = [asyncio.create_task(function(barriers, threads)) for _ in range(workers)]
-                            try:
-                                try:
-                                    for c in asyncio.as_completed(tt, timeout=timeout):
-                                        results.add(await c)
-                                except:
-                                    for t in tt:
-                                        t.cancel()
-                                    raise
-                            except asyncio.TimeoutError:
-                                if parallel and tasks == workers:
-                                    self.assertEqual("Timed", "out")
-                            except Exception:
-                                self.assertEqual("Exception", "occurred")
+                            # In some tests barriers will break, so we need few of them.
+                            barriers = [threading.Barrier(workers, timeout=timeout / 3) for _ in range(4)]
+                            threads = set()
+                            results = set()
 
-                        self.assertEqual(results, {tasks} if parallel else {1})
+                            async with context(
+                                f"max_tasks_{parallel}_{decorated}_{tasks}_{patcher.__name__}",
+                                max_workers=workers,
+                                max_tasks=tasks,
+                                patcher=patcher,
+                            ):
+                                tt = [asyncio.create_task(function(barriers, threads)) for _ in range(workers)]
+                                try:
+                                    try:
+                                        for c in asyncio.as_completed(tt, timeout=timeout):
+                                            results.add(await c)
+                                    except:
+                                        for t in tt:
+                                            t.cancel()
+                                        raise
+                                except asyncio.TimeoutError:
+                                    if parallel and tasks == workers:
+                                        self.assertEqual("Timed", "out")
+                                except Exception:
+                                    self.assertEqual("Exception", "occurred")
+
+                            self.assertEqual(results, {tasks} if parallel else {1})
 
     @django_threaded_sync_to_async.SharedExecutor("decorator")
     async def testDecorator(self):

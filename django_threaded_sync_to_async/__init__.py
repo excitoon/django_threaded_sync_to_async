@@ -2,7 +2,6 @@ import asyncio
 import concurrent.futures
 import contextlib
 import contextvars
-import functools
 import threading
 
 import asgiref.sync
@@ -12,6 +11,7 @@ import django_threaded_sync_to_async.patch
 
 _current_executor = contextvars.ContextVar("current_executor", default=None)
 _max_tasks_semaphore = contextvars.ContextVar("max_tasks_semaphore", default=None)
+_original_sync_to_async_call = asgiref.sync.SyncToAsync.__call__
 _shared_executors = {}
 _shared_executors_lock = threading.Lock()
 
@@ -22,7 +22,7 @@ async def _nullcontext():
     yield
 
 
-async def _sync_to_async_call(self, orig, *args, **kwargs):
+async def _sync_to_async_call(self, *args, **kwargs):
     if (executor := _current_executor.get()) is None:
         """
         The task hit the call outside of executor's scope (or in different context).
@@ -32,7 +32,7 @@ async def _sync_to_async_call(self, orig, *args, **kwargs):
         self = asgiref.sync.SyncToAsync(self.func, thread_sensitive=False, executor=executor)
 
     async with _max_tasks_semaphore.get() or _nullcontext():
-        return await orig(self, *args, **kwargs)
+        return await _original_sync_to_async_call(self, *args, **kwargs)
 
 
 @contextlib.contextmanager
@@ -43,23 +43,23 @@ def _set_context_variable(variable, value):
 
 
 @contextlib.contextmanager
-def _use_executor(executor):
+def _use_executor(executor, patcher=None):
+    patcher = patcher or django_threaded_sync_to_async.patch.one_time
     # `patch.one_time()` can be replaced with `patch.permanent()` if we don't care about restoring everything back.
-    new_call = functools.partialmethod(_sync_to_async_call, asgiref.sync.SyncToAsync.__call__)
-    with django_threaded_sync_to_async.patch.one_time(asgiref.sync.SyncToAsync, "__call__", new_call):
+    with patcher(asgiref.sync.SyncToAsync, "__call__", _sync_to_async_call):
         with _set_context_variable(_current_executor, executor):
             yield executor
 
 
 @contextlib.asynccontextmanager
-async def Executor(*args, **kwargs):
+async def Executor(*args, patcher=None, **kwargs):
     with concurrent.futures.ThreadPoolExecutor(*args, **kwargs) as executor:
-        with _use_executor(executor):
+        with _use_executor(executor, patcher=patcher):
             yield executor
 
 
 @contextlib.asynccontextmanager
-async def SharedExecutor(name, *args, max_tasks=None, **kwargs):
+async def SharedExecutor(name, *args, max_tasks=None, patcher=None, **kwargs):
     with _shared_executors_lock:
         if name in _shared_executors:
             executor = _shared_executors[name]
@@ -69,6 +69,6 @@ async def SharedExecutor(name, *args, max_tasks=None, **kwargs):
             kwargs.setdefault("thread_name_prefix", name)
             executor = _shared_executors[name] = concurrent.futures.ThreadPoolExecutor(*args, **kwargs)
 
-    with _set_context_variable(_max_tasks_semaphore, max_tasks and asyncio.Semaphore(max_tasks)):
-        with _use_executor(executor):
+    with _set_context_variable(_max_tasks_semaphore, max_tasks and asyncio.BoundedSemaphore(max_tasks)):
+        with _use_executor(executor, patcher=patcher):
             yield executor
